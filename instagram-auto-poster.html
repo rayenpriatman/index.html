@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Instagram Auto Poster — AI Tools</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
+
+.header { background: #fff; border-bottom: 1px solid #e5e5e5; padding: 16px 24px; display: flex; align-items: center; gap: 12px; position: sticky; top: 0; z-index: 100; }
+.header-logo { width: 32px; height: 32px; background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); border-radius: 8px; display: flex; align-items: center; justify-content: center; color: white; font-size: 16px; }
+.header h1 { font-size: 16px; font-weight: 600; }
+.header p { font-size: 12px; color: #888; }
+
+.layout { max-width: 800px; margin: 0 auto; padding: 24px 16px; }
+
+.tabs { display: flex; gap: 2px; background: #fff; border: 1px solid #e5e5e5; border-radius: 10px; padding: 4px; margin-bottom: 20px; }
+.tab { flex: 1; padding: 8px 12px; font-size: 13px; cursor: pointer; border: none; background: none; color: #666; border-radius: 7px; font-family: inherit; transition: all 0.15s; text-align: center; }
+.tab.active { background: #1a1a1a; color: #fff; font-weight: 500; }
+.tab:hover:not(.active) { background: #f0f0f0; }
+
+.section { display: none; }
+.section.active { display: block; }
+
+.card { background: #fff; border: 1px solid #e5e5e5; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+.card-title { font-size: 14px; font-weight: 600; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; }
+
+.field { margin-bottom: 16px; }
+label { display: block; font-size: 13px; color: #555; margin-bottom: 6px; font-weight: 500; }
+input, textarea, select {
+  width: 100%; padding: 10px 12px; border: 1px solid #e0e0e0; border-radius: 8px;
+  font-size: 14px; font-family: inherit; background: #fff; color: #1a1a1a;
+  transition: border-color 0.15s; outline: none;
+}
+input:focus, textarea:focus, select:focus { border-color: #1a1a1a; }
+textarea { resize: vertical; min-height: 88px; line-height: 1.6; }
+input[type="password"] { letter-spacing: 2px; }
+
+.row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 500px) { .row { grid-template-columns: 1fr; } }
+
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 10px 18px; font-size: 14px; font-family: inherit; cursor: pointer; border-radius: 8px; border: 1px solid #e0e0e0; background: #fff; color: #1a1a1a; transition: all 0.15s; font-weight: 500; }
+.btn:hover { background: #f5f5f5; }
+.btn:active { transform: scale(0.98); }
+.btn-primary { background: #1a1a1a; color: #fff; border-color: #1a1a1a; }
+.btn-primary:hover { background: #333; }
+.btn-sm { padding: 6px 12px; font-size: 13px; }
+.btn-ig { background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366); color: white; border: none; }
+.btn-ig:hover { opacity: 0.9; background: linear-gradient(135deg, #f09433, #e6683c, #dc2743, #cc2366); }
+
+.result-box {
+  background: #f8f8f6; border: 1px solid #e5e5e5; border-radius: 8px;
+  padding: 14px; font-size: 14px; line-height: 1.7; white-space: pre-wrap;
+  min-height: 80px; position: relative;
+}
+.result-actions { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+
+.badge { display: inline-flex; align-items: center; gap: 4px; font-size: 12px; padding: 3px 10px; border-radius: 20px; font-weight: 500; }
+.badge-success { background: #eaf3de; color: #3b6d11; }
+.badge-warning { background: #faeeda; color: #854f0b; }
+.badge-info { background: #e6f1fb; color: #185fa5; }
+.badge-danger { background: #fcebeb; color: #a32d2d; }
+
+.spinner { width: 14px; height: 14px; border: 2px solid currentColor; border-top-color: transparent; border-radius: 50%; animation: spin 0.7s linear infinite; display: inline-block; flex-shrink: 0; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.tip { font-size: 12px; color: #999; margin-top: 5px; line-height: 1.5; }
+.tip a { color: #185fa5; }
+
+.sched-item { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-bottom: 1px solid #f0f0f0; }
+.sched-item:last-child { border-bottom: none; }
+.sched-thumb { width: 40px; height: 40px; border-radius: 8px; background: linear-gradient(135deg, #f09433, #dc2743); display: flex; align-items: center; justify-content: center; font-size: 18px; color: white; flex-shrink: 0; }
+.sched-info { flex: 1; min-width: 0; }
+.sched-title { font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sched-time { font-size: 12px; color: #888; margin-top: 2px; }
+
+.api-row { display: flex; align-items: center; gap: 10px; }
+.api-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dot-ok { background: #639922; }
+.dot-err { background: #E24B4A; }
+.dot-idle { background: #ccc; }
+
+.info-box { background: #f8f8f6; border-left: 3px solid #e0e0e0; border-radius: 0 8px 8px 0; padding: 12px 14px; font-size: 13px; color: #555; line-height: 1.8; }
+.info-box ol { padding-left: 1.2rem; }
+.info-box code { background: #ebebeb; padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+.copy-btn { position: absolute; top: 10px; right: 10px; }
+
+.empty-state { text-align: center; padding: 32px 0; color: #999; font-size: 14px; }
+.empty-state svg { margin-bottom: 12px; opacity: 0.3; }
+
+.tag { display: inline-block; background: #f0f0f0; color: #555; font-size: 12px; padding: 3px 8px; border-radius: 4px; margin: 2px; }
+
+.note { background: #fffbea; border: 1px solid #f5d367; border-radius: 8px; padding: 12px 14px; font-size: 13px; color: #7a5c00; margin-bottom: 16px; line-height: 1.6; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-logo">📸</div>
+  <div>
+    <h1>Instagram Auto Poster</h1>
+    <p>Generate konten & posting otomatis dengan AI + Meta API</p>
+  </div>
+</div>
+
+<div class="layout">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('caption')">✍️ Caption AI</button>
+    <button class="tab" onclick="switchTab('image')">🖼️ Gambar AI</button>
+    <button class="tab" onclick="switchTab('schedule')">📅 Jadwal</button>
+    <button class="tab" onclick="switchTab('settings')">⚙️ Pengaturan</button>
+  </div>
+
+  <!-- TAB: CAPTION -->
+  <div id="tab-caption" class="section active">
+    <div class="card">
+      <div class="card-title">✍️ Generate Caption dengan AI</div>
+      <div class="field">
+        <label>Topik / ide konten</label>
+        <textarea id="topic" placeholder="Contoh: promosi diskon akhir tahun produk hijab kami, gaya casual tapi elegan, target usia 20-35 tahun..."></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Tone</label>
+          <select id="tone">
+            <option>Profesional</option>
+            <option>Santai & friendly</option>
+            <option>Hype / energik</option>
+            <option>Inspiratif</option>
+            <option>Lucu / receh</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Bahasa</label>
+          <select id="lang">
+            <option>Indonesia</option>
+            <option>Inggris</option>
+            <option>Campur (Indo-Inggris)</option>
+          </select>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Jumlah hashtag</label>
+          <select id="hashtags">
+            <option value="5">Sedikit (5)</option>
+            <option value="15" selected>Sedang (15)</option>
+            <option value="30">Banyak (30)</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Emoji</label>
+          <select id="emoji">
+            <option>Banyak 🔥</option>
+            <option selected>Secukupnya ✨</option>
+            <option>Tanpa emoji</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-primary" onclick="generateCaption()" id="cap-btn">
+        ✨ Generate Caption
+      </button>
+    </div>
+
+    <div id="caption-result" style="display:none;">
+      <div class="card">
+        <div class="card-title">Hasil Caption</div>
+        <div class="result-box" id="caption-text">
+          <button class="btn btn-sm copy-btn" onclick="copyCaption()">📋 Salin</button>
+        </div>
+        <div class="result-actions">
+          <button class="btn btn-sm" onclick="generateCaption()">🔄 Generate ulang</button>
+          <button class="btn btn-sm" onclick="addToSchedule()">📅 Tambah ke jadwal</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: GAMBAR -->
+  <div id="tab-image" class="section">
+    <div class="card">
+      <div class="card-title">🎨 Generate Gambar AI (Gratis, Tanpa Daftar)</div>
+      <div style="background:#eaf3de; border-radius:8px; padding:10px 14px; font-size:13px; color:#3b6d11; margin-bottom:16px;">
+        ✅ Menggunakan <strong>Pollinations.ai</strong> — 100% gratis, tanpa API key, tanpa kartu kredit
+      </div>
+      <div class="field">
+        <label>Deskripsi gambar yang diinginkan (dalam bahasa apapun)</label>
+        <textarea id="imgprompt" placeholder="Contoh: poster jasa terjemah profesional, tipografi bersih, warna biru dongker dan gold, estetik modern minimalis..."></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Rasio gambar</label>
+          <select id="ratio">
+            <option value="1080x1080">1:1 — Feed square</option>
+            <option value="864x1080">4:5 — Feed portrait</option>
+            <option value="608x1080">9:16 — Stories / Reels</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Gaya visual</label>
+          <select id="img-style">
+            <option value="realistic, professional photography">Fotografis realistis</option>
+            <option value="flat design, minimalist, clean">Flat lay minimalis</option>
+            <option value="digital illustration, vibrant colors">Ilustrasi digital</option>
+            <option value="cinematic, dramatic lighting, moody">Cinematic moody</option>
+            <option value="bright, colorful, cheerful, high contrast">Bright & colorful</option>
+            <option value="poster design, typography, graphic design">Poster / desain grafis</option>
+          </select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Jumlah variasi</label>
+        <select id="img-count">
+          <option value="2">2 variasi</option>
+          <option value="4" selected>4 variasi</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" onclick="generateWithPollinations()" id="img-btn">
+        🚀 Generate Gambar Sekarang
+      </button>
+    </div>
+
+    <div id="image-result" style="display:none;">
+      <div class="card">
+        <div class="card-title">Hasil Gambar — Klik untuk pilih</div>
+        <div id="image-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;"></div>
+        <div id="selected-info" style="display:none; font-size:13px; color:#3b6d11; margin-bottom:10px; background:#eaf3de; padding:8px 12px; border-radius:8px;">
+          ✅ Gambar dipilih — siap digunakan untuk posting
+        </div>
+        <div class="result-actions">
+          <button class="btn btn-sm" onclick="generateWithPollinations()">🔄 Generate ulang</button>
+          <button class="btn btn-sm" onclick="downloadSelected()" id="dl-img-btn" style="display:none;">⬇️ Download gambar</button>
+          <button class="btn btn-sm" onclick="useSelectedImage()" id="use-img-btn" style="display:none;">📅 Gunakan untuk posting</button>
+        </div>
+      </div>
+      <div class="info-box">
+        <strong>⚠️ Catatan penting untuk posting Instagram:</strong>
+        <ol style="margin-top:6px;">
+          <li>Download gambar yang dipilih</li>
+          <li>Upload ke <a href="https://cloudinary.com" target="_blank">Cloudinary</a> (gratis) untuk dapat URL publik</li>
+          <li>Masukkan URL Cloudinary ke tab <strong>Jadwal</strong></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: JADWAL -->
+  <div id="tab-schedule" class="section">
+    <div class="note">
+      ⚠️ Pastikan sudah mengisi <strong>Access Token</strong> dan <strong>Account ID</strong> di tab Pengaturan sebelum posting.
+    </div>
+    <div class="card">
+      <div class="card-title">📤 Post ke Instagram</div>
+      <div class="field">
+        <label>URL gambar (harus bisa diakses publik)</label>
+        <input type="url" id="post-image-url" placeholder="https://res.cloudinary.com/xxx/image/upload/gambar.jpg">
+        <p class="tip">Gunakan <a href="https://cloudinary.com" target="_blank">Cloudinary</a>, <a href="https://imgur.com" target="_blank">Imgur</a>, atau hosting lainnya. URL harus HTTPS.</p>
+      </div>
+      <div class="field">
+        <label>Caption</label>
+        <textarea id="post-caption" placeholder="Tulis caption beserta hashtag di sini..." style="min-height: 120px;"></textarea>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Waktu posting</label>
+          <select id="post-timing" onchange="toggleDateTime()">
+            <option value="now">Sekarang</option>
+            <option value="schedule">Jadwalkan</option>
+          </select>
+        </div>
+        <div class="field" id="datetime-field" style="display:none;">
+          <label>Tanggal & waktu</label>
+          <input type="datetime-local" id="post-datetime">
+        </div>
+      </div>
+      <button class="btn btn-ig" onclick="postToInstagram()" id="post-btn">
+        📸 Post ke Instagram
+      </button>
+    </div>
+
+    <div id="post-status" style="display:none;" class="card">
+      <div class="api-row">
+        <div class="api-dot dot-idle" id="post-dot"></div>
+        <span id="post-msg" style="font-size:14px; font-weight:500;"></span>
+      </div>
+      <div id="post-detail" style="font-size:13px; color:#888; margin-top:6px;"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📋 Riwayat Posting</div>
+      <div id="schedule-list">
+        <div class="empty-state">
+          <div>📭</div>
+          Belum ada posting yang dijadwalkan atau dikirim.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB: SETTINGS -->
+  <div id="tab-settings" class="section">
+    <div class="card">
+      <div class="card-title">🔐 Konfigurasi Meta Graph API</div>
+      <div class="field">
+        <label>Access Token</label>
+        <div style="display:flex; gap:8px;">
+          <input type="password" id="access-token" placeholder="EAAxxxxxxxxxxxxx..." style="flex:1;">
+          <button class="btn btn-sm" onclick="toggleToken()">👁️</button>
+        </div>
+        <p class="tip">
+          Dapatkan dari <a href="https://developers.facebook.com/tools/explorer/" target="_blank">Meta Graph API Explorer</a>.
+          Permission yang dibutuhkan: <code>instagram_basic</code>, <code>instagram_content_publish</code>
+        </p>
+      </div>
+      <div class="field">
+        <label>Instagram Business Account ID</label>
+        <input type="text" id="ig-account-id" placeholder="123456789012345">
+        <p class="tip">Cek di: Instagram → Settings → Professional account → Instagram ID</p>
+      </div>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+        <button class="btn btn-primary btn-sm" onclick="saveSettings()">💾 Simpan</button>
+        <button class="btn btn-sm" onclick="testConnection()">🔌 Test koneksi</button>
+        <div id="conn-status" style="font-size:13px; color:#555;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">📖 Cara Setup Meta API (Step by step)</div>
+      <div class="info-box">
+        <ol>
+          <li>Buka <a href="https://developers.facebook.com" target="_blank">developers.facebook.com</a> → Buat App baru</li>
+          <li>Pilih tipe app: <strong>Business</strong></li>
+          <li>Tambahkan produk <strong>Instagram Graph API</strong></li>
+          <li>Di menu Roles → Add Instagram Tester → accept di akun Instagram kamu</li>
+          <li>Buka <strong>Graph API Explorer</strong> → pilih app kamu</li>
+          <li>Tambahkan permission: <code>instagram_basic</code>, <code>instagram_content_publish</code>, <code>pages_read_engagement</code></li>
+          <li>Klik <strong>Generate Access Token</strong> → salin tokennya</li>
+          <li>Jalankan query: <code>GET /me/accounts</code> untuk dapat page ID</li>
+          <li>Lalu: <code>GET /{page-id}?fields=instagram_business_account</code> untuk dapat Instagram Account ID</li>
+          <li>Masukkan token dan ID ke form di atas → klik Simpan</li>
+        </ol>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-title">⚠️ Syarat akun Instagram</div>
+      <ul style="font-size:13px; color:#555; padding-left:1.2rem; line-height:2.2;">
+        <li>Akun harus tipe <strong>Business</strong> atau <strong>Creator</strong> (bukan personal)</li>
+        <li>Akun harus terhubung dengan <strong>Facebook Page</strong></li>
+        <li>Gambar harus berformat <strong>JPEG</strong>, rasio antara 4:5 sampai 1.91:1</li>
+        <li>URL gambar harus <strong>HTTPS</strong> dan bisa diakses publik</li>
+        <li>Token perlu diperbarui setiap <strong>60 hari</strong> (atau gunakan long-lived token)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+
+<script>
+// =====================
+// STATE
+// =====================
+let scheduleItems = [];
+let captionResult = '';
+let imagePromptResult = '';
+
+// =====================
+// API KEY — ganti dengan API key Anthropic kamu
+// =====================
+const ANTHROPIC_API_KEY = 'GANTI_DENGAN_API_KEY_KAMU';
+
+// =====================
+// TABS
+// =====================
+function switchTab(name) {
+  document.querySelectorAll('.tab').forEach((t, i) => {
+    t.classList.toggle('active', ['caption','image','schedule','settings'][i] === name);
+  });
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+  document.getElementById('tab-' + name).classList.add('active');
+}
+
+function toggleDateTime() {
+  const v = document.getElementById('post-timing').value;
+  document.getElementById('datetime-field').style.display = v === 'schedule' ? 'block' : 'none';
+}
+
+// =====================
+// GENERATE CAPTION
+// =====================
+async function generateCaption() {
+  const topic = document.getElementById('topic').value.trim();
+  if (!topic) { alert('Masukkan topik terlebih dahulu'); return; }
+
+  const tone = document.getElementById('tone').value;
+  const lang = document.getElementById('lang').value;
+  const hashtags = document.getElementById('hashtags').value;
+  const emoji = document.getElementById('emoji').value;
+
+  const btn = document.getElementById('cap-btn');
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  btn.disabled = true;
+
+  const resultBox = document.getElementById('caption-result');
+  const captionText = document.getElementById('caption-text');
+  resultBox.style.display = 'block';
+  captionText.innerHTML = '<span class="spinner"></span> AI sedang menulis caption...';
+
+  const prompt = `Buat caption Instagram yang menarik dan engaging.
+
+Topik: ${topic}
+Tone: ${tone}
+Bahasa: ${lang}
+Jumlah hashtag: ${hashtags}
+Emoji: ${emoji}
+
+Format output:
+1. Caption utama (2-4 paragraf yang engaging)
+2. Call to action yang kuat
+3. Hashtag (sesuai jumlah yang diminta)
+
+Jangan tambahkan penjelasan atau label, langsung tulis captionnya saja.`;
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01'
+      },
+      body: JSON.stringify({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 1000,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+    const data = await res.json();
+    captionResult = data.content.map(c => c.text || '').join('');
+    captionText.innerHTML = '<button class="btn btn-sm copy-btn" onclick="copyCaption()">📋 Salin</button>' + captionResult;
+  } catch (e) {
+    captionText.innerHTML = '<span style="color:#E24B4A">Gagal generate. Pastikan API key sudah diatur di kode.</span>';
+  }
+
+  btn.innerHTML = '✨ Generate Caption';
+  btn.disabled = false;
+}
+
+// =====================
+// GENERATE IMAGE — POLLINATIONS.AI (gratis, tanpa API key)
+// =====================
+let selectedImageUrl = '';
+let selectedImageEl = null;
+
+async function generateWithPollinations() {
+  const desc = document.getElementById('imgprompt').value.trim();
+  if (!desc) { alert('Masukkan deskripsi gambar terlebih dahulu'); return; }
+
+  const ratioVal = document.getElementById('ratio').value;
+  const [imgW, imgH] = ratioVal.split('x').map(Number);
+  const styleText = document.getElementById('img-style').value;
+  const count = parseInt(document.getElementById('img-count').value);
+
+  const btn = document.getElementById('img-btn');
+  btn.innerHTML = '<span class="spinner"></span> Generating...';
+  btn.disabled = true;
+
+  const resultEl = document.getElementById('image-result');
+  const grid = document.getElementById('image-grid');
+  resultEl.style.display = 'block';
+  grid.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:32px; color:#888;"><span class="spinner"></span> Membuat gambar... (10-20 detik)</div>';
+  document.getElementById('selected-info').style.display = 'none';
+  document.getElementById('use-img-btn').style.display = 'none';
+  document.getElementById('dl-img-btn').style.display = 'none';
+  selectedImageUrl = '';
+
+  const fullPrompt = encodeURIComponent(`${desc}, ${styleText}, high quality, instagram post`);
+
+  // Generate beberapa variasi dengan seed berbeda
+  const seeds = Array.from({length: count}, () => Math.floor(Math.random() * 999999));
+
+  const urls = seeds.map(seed =>
+    `https://image.pollinations.ai/prompt/${fullPrompt}?width=${imgW}&height=${imgH}&seed=${seed}&nologo=true&enhance=true`
+  );
+
+  grid.innerHTML = urls.map((url, i) => `
+    <div onclick="selectImage('${url}', this)" id="img-card-${i}"
+      style="cursor:pointer; border-radius:10px; overflow:hidden; border:2px solid transparent; transition:border-color 0.2s; background:#f0f0f0; min-height:160px; display:flex; align-items:center; justify-content:center;">
+      <img src="${url}" style="width:100%; display:block; border-radius:8px;"
+        alt="Variasi ${i+1}"
+        onload="this.parentElement.style.minHeight='auto'"
+        onerror="this.parentElement.innerHTML='<div style=\'padding:20px; text-align:center; font-size:12px; color:#888;\'>❌ Gagal load, coba generate ulang</div>'">
+      <div style="text-align:center; font-size:12px; color:#888; padding:6px; position:absolute; bottom:0; width:100%; background:rgba(255,255,255,0.8);">Variasi ${i+1} — klik untuk pilih</div>
+    </div>
+  `).join('');
+
+  // Buat container relative untuk posisi label
+  document.querySelectorAll('[id^="img-card-"]').forEach(c => c.style.position = 'relative');
+
+  btn.innerHTML = '🚀 Generate Gambar Sekarang';
+  btn.disabled = false;
+}
+
+function selectImage(url, el) {
+  selectedImageUrl = url;
+  document.querySelectorAll('[id^="img-card-"]').forEach(c => c.style.borderColor = 'transparent');
+  el.style.borderColor = '#3b6d11';
+  document.getElementById('selected-info').style.display = 'block';
+  document.getElementById('use-img-btn').style.display = 'inline-flex';
+  document.getElementById('dl-img-btn').style.display = 'inline-flex';
+}
+
+function downloadSelected() {
+  if (!selectedImageUrl) return;
+  const a = document.createElement('a');
+  a.href = selectedImageUrl;
+  a.download = 'gambar-instagram.jpg';
+  a.target = '_blank';
+  a.click();
+}
+
+function useSelectedImage() {
+  if (!selectedImageUrl) return;
+  switchTab('schedule');
+  document.getElementById('post-image-url').value = selectedImageUrl;
+}
+
+// =====================
+// COPY
+// =====================
+function copyCaption() {
+  navigator.clipboard.writeText(captionResult).then(() => {
+    alert('Caption berhasil disalin!');
+  });
+}
+
+function copyImagePrompt() {
+  navigator.clipboard.writeText(imagePromptResult).then(() => {
+    alert('Prompt berhasil disalin!');
+  });
+}
+
+// =====================
+// ADD TO SCHEDULE
+// =====================
+function addToSchedule() {
+  if (!captionResult) return;
+  scheduleItems.unshift({
+    caption: captionResult.substring(0, 70) + '...',
+    time: new Date().toLocaleString('id-ID'),
+    status: 'draft'
+  });
+  renderSchedule();
+  switchTab('schedule');
+  document.getElementById('post-caption').value = captionResult;
+}
+
+function renderSchedule() {
+  const list = document.getElementById('schedule-list');
+  if (scheduleItems.length === 0) {
+    list.innerHTML = '<div class="empty-state"><div>📭</div>Belum ada posting yang dijadwalkan atau dikirim.</div>';
+    return;
+  }
+  list.innerHTML = scheduleItems.map((item) => `
+    <div class="sched-item">
+      <div class="sched-thumb">📸</div>
+      <div class="sched-info">
+        <div class="sched-title">${item.caption}</div>
+        <div class="sched-time">${item.time}</div>
+      </div>
+      <span class="badge ${item.status === 'posted' ? 'badge-success' : item.status === 'draft' ? 'badge-warning' : 'badge-info'}">
+        ${item.status === 'posted' ? '✅ Terposting' : item.status === 'draft' ? '📝 Draft' : '⏰ Dijadwalkan'}
+      </span>
+    </div>
+  `).join('');
+}
+
+// =====================
+// POST TO INSTAGRAM
+// =====================
+async function postToInstagram() {
+  const token = localStorage.getItem('ig_token');
+  const accountId = localStorage.getItem('ig_account_id');
+  const imageUrl = document.getElementById('post-image-url').value.trim();
+  const caption = document.getElementById('post-caption').value.trim();
+
+  if (!token || !accountId) {
+    alert('Lengkapi Access Token dan Account ID di tab Pengaturan terlebih dahulu');
+    switchTab('settings');
+    return;
+  }
+  if (!imageUrl) { alert('Masukkan URL gambar terlebih dahulu'); return; }
+  if (!caption) { alert('Masukkan caption terlebih dahulu'); return; }
+
+  const btn = document.getElementById('post-btn');
+  btn.innerHTML = '<span class="spinner"></span> Memproses...';
+  btn.disabled = true;
+
+  const statusEl = document.getElementById('post-status');
+  const dot = document.getElementById('post-dot');
+  const msg = document.getElementById('post-msg');
+  const detail = document.getElementById('post-detail');
+  statusEl.style.display = 'block';
+  dot.className = 'api-dot dot-idle';
+  msg.innerHTML = '<span class="spinner"></span> Membuat media container...';
+  detail.textContent = '';
+
+  try {
+    // Step 1: Create media container
+    const r1 = await fetch(`https://graph.facebook.com/v19.0/${accountId}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        image_url: imageUrl,
+        caption: caption,
+        access_token: token
+      })
+    });
+    const d1 = await r1.json();
+    if (d1.error) throw new Error(d1.error.message);
+    const creationId = d1.id;
+
+    msg.innerHTML = '<span class="spinner"></span> Mempublish ke Instagram...';
+
+    // Step 2: Publish
+    const r2 = await fetch(`https://graph.facebook.com/v19.0/${accountId}/media_publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        creation_id: creationId,
+        access_token: token
+      })
+    });
+    const d2 = await r2.json();
+    if (d2.error) throw new Error(d2.error.message);
+
+    dot.className = 'api-dot dot-ok';
+    msg.textContent = '✅ Berhasil diposting ke Instagram!';
+    detail.textContent = 'Media ID: ' + d2.id;
+
+    scheduleItems.unshift({
+      caption: caption.substring(0, 70) + '...',
+      time: new Date().toLocaleString('id-ID'),
+      status: 'posted'
+    });
+    renderSchedule();
+
+    document.getElementById('post-image-url').value = '';
+    document.getElementById('post-caption').value = '';
+  } catch (e) {
+    dot.className = 'api-dot dot-err';
+    msg.textContent = '❌ Gagal posting';
+    detail.textContent = e.message;
+  }
+
+  btn.innerHTML = '📸 Post ke Instagram';
+  btn.disabled = false;
+}
+
+// =====================
+// SETTINGS
+// =====================
+function saveSettings() {
+  const token = document.getElementById('access-token').value.trim();
+  const id = document.getElementById('ig-account-id').value.trim();
+  if (token) localStorage.setItem('ig_token', token);
+  if (id) localStorage.setItem('ig_account_id', id);
+  document.getElementById('conn-status').innerHTML = '✅ Tersimpan!';
+  setTimeout(() => { document.getElementById('conn-status').innerHTML = ''; }, 2000);
+}
+
+async function testConnection() {
+  const token = document.getElementById('access-token').value.trim() || localStorage.getItem('ig_token');
+  const id = document.getElementById('ig-account-id').value.trim() || localStorage.getItem('ig_account_id');
+  const status = document.getElementById('conn-status');
+
+  if (!token || !id) {
+    status.innerHTML = '<span style="color:#E24B4A">⚠️ Isi token dan account ID dahulu</span>';
+    return;
+  }
+
+  status.innerHTML = '<span class="spinner"></span> Testing...';
+
+  try {
+    const r = await fetch(`https://graph.facebook.com/v19.0/${id}?fields=name,username&access_token=${token}`);
+    const d = await r.json();
+    if (d.error) throw new Error(d.error.message);
+    status.innerHTML = `<span style="color:#3b6d11">✅ Terhubung: @${d.username || d.name}</span>`;
+  } catch (e) {
+    status.innerHTML = `<span style="color:#E24B4A">❌ ${e.message}</span>`;
+  }
+}
+
+function toggleToken() {
+  const inp = document.getElementById('access-token');
+  inp.type = inp.type === 'password' ? 'text' : 'password';
+}
+
+// =====================
+// LOAD SAVED SETTINGS
+// =====================
+const saved_token = localStorage.getItem('ig_token');
+const saved_id = localStorage.getItem('ig_account_id');
+if (saved_token) document.getElementById('access-token').value = saved_token;
+if (saved_id) document.getElementById('ig-account-id').value = saved_id;
+</script>
+</body>
+</html>
