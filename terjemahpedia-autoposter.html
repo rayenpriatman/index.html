@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Auto Poster Instagram — Terjemahpedia</title>
-<script src="https://js.puter.com/v2/"></script>
+
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f5f5f0; color: #1a1a1a; min-height: 100vh; }
@@ -203,6 +203,11 @@ input[type="password"] { letter-spacing: 2px; }
         </div>
       </div>
       <div class="field">
+        <label>ImgBB API Key (untuk upload poster ke internet)</label>
+        <input type="password" id="imgbb-key" placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx">
+        <p class="tip">Daftar gratis di <a href="https://api.imgbb.com" target="_blank">api.imgbb.com</a> → Get API key. Gratis, tanpa kartu kredit.</p>
+      </div>
+      <div class="field">
         <label>Anthropic API Key (untuk caption AI)</label>
         <input type="password" id="anthropic-key" placeholder="sk-ant-api03-...">
         <p class="tip">Dari <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a> — untuk generate caption otomatis</p>
@@ -242,6 +247,8 @@ let history = JSON.parse(localStorage.getItem('ap_history') || '[]');
 // LOAD SETTINGS
 // =====================
 window.onload = () => {
+  const ib = localStorage.getItem('ap_imgbb');
+  if (ib) document.getElementById('imgbb-key').value = ib;
   const t = localStorage.getItem('ap_token');
   const id = localStorage.getItem('ap_ig_id');
   const ak = localStorage.getItem('ap_anthropic');
@@ -287,38 +294,54 @@ async function runAll() {
   }
 
   // STEP 2: Generate Image
-  setStep('image', 'active', '⏳', 'Generating poster dengan AI... (30-60 detik)');
+  setStep('image', 'active', '⏳', 'Membuat poster...');
   try {
     currentImageUrl = await generateImage(cmd);
     setStep('image', 'done', '✓', 'Poster selesai dibuat');
   } catch(e) {
-    setStep('image', 'error', '✗', 'Gagal generate poster: ' + e.message);
-    // Tetap lanjut tampilkan caption meski gambar gagal
+    setStep('image', 'error', '✗', 'Gagal buat poster: ' + e.message);
   }
 
   // Tampilkan hasil
   showResult();
 
-  // STEP 3: Post ke Instagram (kalau token ada)
+  // STEP 3: Upload + Post ke Instagram
   if (token && igId && currentImageUrl) {
-    setStep('post', 'active', '⏳', 'Posting ke Instagram...');
+    setStep('post', 'active', '⏳', 'Upload & posting ke Instagram...');
     try {
-      await postInstagram(token, igId, currentImageUrl, currentCaption);
+      // Upload ke ImgBB dulu untuk dapat URL publik
+      let publicUrl = currentImageUrl;
+      if (currentImageUrl.startsWith('data:')) {
+        const imgbbKey = localStorage.getItem('ap_imgbb') || '';
+        if (imgbbKey) {
+          const base64Data = currentImageUrl.split(',')[1];
+          const fd = new FormData();
+          fd.append('key', imgbbKey);
+          fd.append('image', base64Data);
+          const ur = await fetch('https://api.imgbb.com/1/upload', { method: 'POST', body: fd });
+          const ud = await ur.json();
+          if (ud.data && ud.data.url) publicUrl = ud.data.url;
+          else throw new Error('Upload gambar gagal — cek ImgBB API key');
+        } else {
+          throw new Error('ImgBB API key belum diatur di Pengaturan');
+        }
+      }
+      currentImageUrl = publicUrl;
+      showResult();
+      await postInstagram(token, igId, publicUrl, currentCaption);
       setStep('post', 'done', '✓', 'Berhasil diposting ke Instagram! 🎉');
       showPostStatus('success', '✅ Berhasil diposting ke Instagram!');
       addHistory(cmd, currentImageUrl, 'posted');
     } catch(e) {
-      setStep('post', 'error', '✗', 'Gagal posting: ' + e.message);
-      showPostStatus('error', '❌ Gagal posting: ' + e.message);
+      setStep('post', 'error', '✗', 'Gagal: ' + e.message);
+      showPostStatus('error', '❌ ' + e.message);
       document.getElementById('post-btn').style.display = 'inline-flex';
       addHistory(cmd, currentImageUrl, 'failed');
     }
   } else {
-    setStep('post', 'error', '!', token ? 'URL gambar tidak tersedia' : 'Token belum diatur — klik "Post ke Instagram" manual');
+    setStep('post', 'error', '!', token ? 'Gambar tidak tersedia' : 'Atur token di Pengaturan untuk posting otomatis');
+    if (!token || !igId) showPostStatus('error', '⚠️ Atur Access Token & Account ID di Pengaturan');
     document.getElementById('post-btn').style.display = token && igId ? 'inline-flex' : 'none';
-    if (!token || !igId) {
-      showPostStatus('error', '⚠️ Atur Access Token & Account ID di Pengaturan untuk posting otomatis');
-    }
   }
 
   finishRun();
@@ -367,47 +390,219 @@ Langsung tulis captionnya saja tanpa label atau penjelasan.`
 }
 
 // =====================
-// GENERATE IMAGE (Puter.js)
+// GENERATE IMAGE — Canvas Poster Generator (tanpa API, tanpa login)
 // =====================
 async function generateImage(cmd) {
-  // Build smart prompt dari perintah user
-  const promptRes = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': localStorage.getItem('ap_anthropic') || '',
-      'anthropic-version': '2023-06-01'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 200,
-      messages: [{
-        role: 'user',
-        content: `Convert this Indonesian instruction to an English image prompt for a professional Instagram poster: "${cmd}". Include: professional poster design, clean typography, modern layout, high quality, commercial design. Max 100 words, prompt only.`
-      }]
-    })
-  }).catch(() => null);
+  const canvas = document.createElement('canvas');
+  canvas.width = 1080;
+  canvas.height = 1080;
+  const ctx = canvas.getContext('2d');
 
-  let imagePrompt = `Professional Instagram poster for translation service, modern design, blue and gold colors, clean typography, business card style, high quality commercial design`;
+  // Parse info dari perintah
+  const phone = cmd.match(/0\d{9,11}/)?.[0] || '082323963884';
+  const hasDiskon = cmd.match(/diskon\s*(\d+)%/i);
+  const diskon = hasDiskon ? hasDiskon[1] : null;
+  const isPromo = cmd.toLowerCase().includes('promo') || diskon;
+  const isDoc = cmd.toLowerCase().includes('dokumen') || cmd.toLowerCase().includes('resmi') || cmd.toLowerCase().includes('legalisir');
+  const isMulti = cmd.toLowerCase().includes('multibahasa') || cmd.toLowerCase().includes('multi bahasa');
 
-  if (promptRes) {
-    const pd = await promptRes.json().catch(() => null);
-    if (pd && pd.content) imagePrompt = pd.content.map(c => c.text || '').join('');
+  // Tema warna
+  const theme = isPromo
+    ? { bg1: '#1a237e', bg2: '#283593', acc: '#FFD600', acc2: '#FF6F00', text: '#fff' }
+    : { bg1: '#0d1b4b', bg2: '#1a3a7c', acc: '#F5A623', acc2: '#E8860A', text: '#fff' };
+
+  // === BACKGROUND GRADIENT ===
+  const bgGrad = ctx.createLinearGradient(0, 0, 1080, 1080);
+  bgGrad.addColorStop(0, theme.bg1);
+  bgGrad.addColorStop(1, theme.bg2);
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, 1080, 1080);
+
+  // === DEKORASI LINGKARAN ===
+  ctx.globalAlpha = 0.08;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(950, 150, 300, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(100, 900, 250, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(540, 540, 400, 0, Math.PI*2); ctx.fill();
+  ctx.globalAlpha = 1;
+
+  // === GARIS AKSEN ATAS ===
+  const topGrad = ctx.createLinearGradient(0, 0, 1080, 0);
+  topGrad.addColorStop(0, theme.acc);
+  topGrad.addColorStop(1, theme.acc2);
+  ctx.fillStyle = topGrad;
+  ctx.fillRect(0, 0, 1080, 12);
+
+  // === HEADER BADGE ===
+  ctx.fillStyle = theme.acc;
+  roundRect(ctx, 60, 60, 300, 60, 30);
+  ctx.fillStyle = theme.bg1;
+  ctx.font = 'bold 26px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('TERJEMAHPEDIA', 210, 99);
+
+  // === ICON GLOBE (SVG-style via Canvas) ===
+  drawGlobe(ctx, 820, 200, 120, theme.acc);
+
+  // === JUDUL UTAMA ===
+  if (diskon) {
+    ctx.fillStyle = theme.acc;
+    ctx.font = 'bold 80px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('DISKON', 60, 260);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 160px Arial';
+    ctx.fillText(diskon + '%', 60, 420);
+    ctx.fillStyle = theme.acc;
+    ctx.font = 'bold 60px Arial';
+    ctx.fillText('SPESIAL!', 60, 490);
   } else {
-    // Fallback: buat prompt dari kata kunci
-    imagePrompt = `Professional Instagram poster: ${cmd}, modern graphic design, blue navy and gold color scheme, clean minimalist layout, professional typography, high quality`;
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 80px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText('JASA', 60, 260);
+    ctx.fillStyle = theme.acc;
+    ctx.font = 'bold 110px Arial';
+    ctx.fillText('TERJEMAH', 60, 380);
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 52px Arial';
+    ctx.fillText('PROFESIONAL', 60, 450);
   }
 
-  // Generate via Puter.js
-  const imgEl = await puter.ai.txt2img(imagePrompt, false, 'dall-e-3');
+  // === GARIS PEMISAH ===
+  const lineGrad = ctx.createLinearGradient(60, 0, 700, 0);
+  lineGrad.addColorStop(0, theme.acc);
+  lineGrad.addColorStop(1, 'transparent');
+  ctx.fillStyle = lineGrad;
+  ctx.fillRect(60, 480, 640, 4);
 
-  // Extract URL dari img element
-  if (imgEl && imgEl.src) return imgEl.src;
+  // === TAGLINE ===
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.font = '32px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('Terjemahan berkualitas untuk kebutuhan', 60, 540);
+  ctx.fillText('pribadi, bisnis, dan institusi Anda.', 60, 580);
 
-  // Fallback ke Pollinations jika Puter gagal
-  const seed = Math.floor(Math.random() * 999999);
-  const encoded = encodeURIComponent(imagePrompt + ', professional poster design, instagram post');
-  return `https://image.pollinations.ai/prompt/${encoded}?width=1080&height=1080&seed=${seed}&nologo=true&enhance=true`;
+  // === LAYANAN BOXES ===
+  const layanan = isDoc
+    ? ['📄 Terjemah Dokumen Resmi', '✅ Tersumpah & Legalisir', '🌐 Multibahasa', '⚡ Cepat & Akurat']
+    : isMulti
+    ? ['🌐 Inggris, Arab, Mandarin', '🇯🇵 Jepang, Korea, dll', '📄 Dokumen & Konten', '⚡ Cepat & Akurat']
+    : ['📄 Terjemah Dokumen', '🌐 Terjemah Multibahasa', '⚡ Cepat & Tepat Waktu', '✅ Terjemah Resmi'];
+
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  roundRect(ctx, 60, 620, 960, 220, 20);
+
+  ctx.fillStyle = theme.acc;
+  ctx.font = 'bold 28px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('LAYANAN KAMI', 90, 665);
+
+  layanan.forEach((item, i) => {
+    const x = 90 + (i % 2) * 490;
+    const y = 700 + Math.floor(i / 2) * 60;
+    ctx.fillStyle = '#fff';
+    ctx.font = '26px Arial';
+    ctx.fillText(item, x, y);
+  });
+
+  // === KEUNGGULAN BADGES ===
+  const badges = ['✓ Akurat & Terpercaya', '✓ Harga Kompetitif', '✓ Kerahasiaan Terjamin'];
+  ctx.fillStyle = 'rgba(245,166,35,0.15)';
+  roundRect(ctx, 60, 860, 960, 70, 15);
+  badges.forEach((b, i) => {
+    ctx.fillStyle = theme.acc;
+    ctx.font = 'bold 22px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(b, 200 + i * 300, 902);
+  });
+
+  // === FOOTER ===
+  const footGrad = ctx.createLinearGradient(0, 960, 1080, 960);
+  footGrad.addColorStop(0, theme.acc);
+  footGrad.addColorStop(1, theme.acc2);
+  ctx.fillStyle = footGrad;
+  ctx.fillRect(0, 950, 1080, 130);
+
+  // WA icon circle
+  ctx.fillStyle = '#25D366';
+  ctx.beginPath(); ctx.arc(100, 1015, 35, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 30px Arial';
+  ctx.textAlign = 'center';
+  ctx.fillText('WA', 100, 1025);
+
+  ctx.fillStyle = theme.bg1;
+  ctx.font = 'bold 22px Arial';
+  ctx.textAlign = 'left';
+  ctx.fillText('HUBUNGI KAMI', 150, 1000);
+  ctx.font = 'bold 42px Arial';
+  ctx.fillText(phone, 150, 1045);
+
+  ctx.fillStyle = theme.bg1;
+  ctx.font = 'bold 22px Arial';
+  ctx.textAlign = 'right';
+  ctx.fillText('TERJEMAHPEDIA', 1020, 1000);
+  ctx.font = '20px Arial';
+  ctx.fillText('Bahasa Bukan Penghalang,', 1020, 1030);
+  ctx.fillText('Kami Jembatannya.', 1020, 1055);
+
+  // === GARIS BAWAH ===
+  ctx.fillStyle = theme.bg1;
+  ctx.fillRect(0, 1068, 1080, 12);
+
+  return canvas.toDataURL('image/jpeg', 0.95);
+}
+
+// Helper: rounded rectangle
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+// Helper: globe icon
+function drawGlobe(ctx, cx, cy, r, color) {
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = 0.6;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.ellipse(cx, cy, r*0.5, r, 0, 0, Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-r, cy); ctx.lineTo(cx+r, cy); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx, cy-r); ctx.lineTo(cx, cy+r); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r*0.6, 0, Math.PI*2); ctx.stroke();
+  ctx.globalAlpha = 1;
+}
+
+// Override showResult untuk handle base64
+const _origShowResult = showResult;
+function showResult() {
+  document.getElementById('result-box').style.display = 'block';
+  document.getElementById('caption-preview').textContent = currentCaption;
+  const preview = document.getElementById('poster-preview');
+  if (currentImageUrl) {
+    preview.innerHTML = `<img src="${currentImageUrl}" alt="Poster" style="width:100%;display:block;border-radius:8px;">`;
+  } else {
+    preview.innerHTML = '<div style="padding:40px;text-align:center;color:#E24B4A;font-size:13px;">❌ Gambar gagal dibuat</div>';
+  }
+}
+
+// Override downloadPoster untuk base64
+function downloadPoster() {
+  if (!currentImageUrl) return;
+  const a = document.createElement('a');
+  a.href = currentImageUrl;
+  a.download = 'poster-terjemahpedia.jpg';
+  a.click();
 }
 
 // =====================
@@ -546,6 +741,8 @@ function toggleToken() {
 }
 
 function saveSettings() {
+  const ib = document.getElementById('imgbb-key').value.trim();
+  if (ib) localStorage.setItem('ap_imgbb', ib);
   const t = document.getElementById('access-token').value.trim();
   const id = document.getElementById('ig-id').value.trim();
   const ak = document.getElementById('anthropic-key').value.trim();
